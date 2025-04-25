@@ -4,8 +4,6 @@ that the mapping from the Solver::to_smt2 string to sat/unsat/unknown
 is deterministic if query returned without timeout. If answer is unknown
 because of timeout, makes note of that
 '''
-
-
 from .my_solver import MySolver
 from fractions import Fraction
 import hashlib
@@ -15,6 +13,7 @@ import pickle as pkl
 from typing import Dict, List, Optional, Union
 import z3
 from z3 import Solver, parse_smt2_string
+from dataclasses import is_dataclass
 
 
 class Variables:
@@ -65,7 +64,10 @@ def model_to_dict(model: z3.ModelRef) -> ModelDict:
         else:
             # Assume it is numeric
             print(d.name(), type(val), val)
-            res[d.name()] = val.as_fraction()
+            if hasattr(val, 'as_fraction'):
+                res[d.name()] = val.as_fraction()
+            else:
+                res[d.name()] = val.as_list()
     return res
 
 
@@ -92,6 +94,15 @@ def fill_obj_from_dict(v, m: ModelDict):
             res.__dict__[x] = [fill_obj_from_dict(y, m) for y in v.__dict__[x]]
         elif isinstance(v.__dict__[x], Variables):
             res.__dict__[x] = fill_obj_from_dict(v.__dict__[x], m)
+        elif isinstance(v.__dict__[x], dict):
+            res.__dict__[x] = dict()
+            for metric in v.__dict__[x]:
+                res.__dict__[x][metric] = dict()
+                if is_dataclass(v.__dict__[x][metric]):
+                    for structParam in v.__dict__[x][metric].__annotations__.keys():
+                        res.__dict__[x][metric][structParam] = fill_obj_from_dict(getattr(v.__dict__[x][metric],
+                                                                                          structParam), m)
+
     return res
 
 
